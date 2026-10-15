@@ -1,3 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Godot 保存场景/脚本时可能留下的临时残留(形如 X.tscn12345.tmp)
+*.tmp
