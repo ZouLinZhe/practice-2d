@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://dr8qj0npbd0tx"]
+
+[ext_resource type="Script" uid="uid://krlns4a0xqbd" path="res://Script/Button/button_test1.gd" id="1_xhtwi"]
+
+[node name="Node2D" type="Node2D" unique_id=1301030581]
+
+[node name="Button" type="Button" parent="." unique_id=2040746930]
+offset_left = 75.0
+offset_top = 518.0
+offset_right = 175.0
+offset_bottom = 558.0
+text = "跳转到测试场景1"
+script = ExtResource("1_xhtwi")
+
+[connection signal="pressed" from="Button" to="Button" method="_on_pressed"]
