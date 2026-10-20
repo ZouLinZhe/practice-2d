@@ -13,7 +13,9 @@ extends Node
 ##     Player (CharacterBody2D，挂 player.gd，继承 BaseCharacter)
 ##     └─ StateMachine
 ##        ├─ Idle   ← initial_state 指向它
-##        └─ Run
+##        ├─ Run
+##        ├─ Attack
+##        └─ Hurt      （Die 节点暂时没挂脚本）
 
 ## 初始状态，在检查器里指定（本例指向 Idle 节点）。
 @export var initial_state: State

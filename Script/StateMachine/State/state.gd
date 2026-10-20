@@ -38,10 +38,15 @@ func physics_update(_delta: float) -> void:
 func handle_input(_event: InputEvent) -> void:
 	pass
 
-## 播放"本状态 + 当前朝向"的动画。
+## 播放"本状态 + 朝向"的动画。
 ##
 ## 前缀自动取自状态节点名：Idle 节点播 Idle_Up，Run 节点播 Run_Left。
-## 这样一来子类里只要写 play_animation()，前缀不可能拼错，
-## 加新状态（Attack / Hurt）时也不用再各写一份。
-func play_animation() -> void:
-	character.play_animation(str(name))
+## 所以子类只要写 play_animation()，前缀就不可能拼错。
+## [param heading] 指定朝向；省略(-1)时按角色输入方向自动刷新。
+##                  受击这类"朝向由外部决定"的状态可以显式传入。
+##                  用 -1 作哨兵，是因为枚举 0~3 都是合法值。
+func play_animation(heading: int = -1) -> void:
+	if heading < 0:
+		character.play_animation(str(name))
+	else:
+		character.play_animation(str(name), heading)

@@ -10,7 +10,7 @@ extends CharacterBody2D
 ##
 ## 子类只负责决定"往哪走"，把结果写进 input_direction 就行：
 ## - Player：读键盘 / 手柄
-## - Enemy（待做）：读 AI 算出来的方向
+## - Enemy：由 AI 决定方向（当前是"发现玩家就追"的雏形）
 ## 至于怎么移动、怎么攻击、被打到怎么办，全部交给 StateMachine 下的各个状态。
 
 ## 朝向枚举。用枚举而不是字符串，是为了让写错的值直接报错，
@@ -51,6 +51,12 @@ var facing_direction := Heading.DOWN
 ## 状态机子节点，由本类负责启动。
 @onready var state_machine: StateMachine = $StateMachine
 
+## 受伤后的无敌标记：true 时免疫伤害。
+##
+## 由 Hurt 状态在进入时置 true、计时结束后置 false。
+## 伤害入口（以后的 take_damage()）必须先检查它，否则无敌形同虚设。
+var is_invincible = false
+
 ## 等自己所有的 @onready 变量就位之后，再启动状态机进入初始状态。
 ##
 ## 顺序很重要：Godot 的 _ready() 是子节点先执行、父节点后执行，所以状态机无法
@@ -62,15 +68,22 @@ func _ready() -> void:
 		return
 	state_machine.start()
 
-## 根据 input_direction 更新朝向；没有输入时保持原朝向不变。
-func face_towards() -> void:
-	if input_direction == Vector2.ZERO:
-		return   # 没输入就保持原朝向，顺便躲开零向量会被判成"向右"的坑
-	# 比较横纵分量谁更大，等价于按 45 度把平面切成四块，不需要三角函数。
-	if abs(input_direction.x) > abs(input_direction.y):
-		facing_direction = Heading.LEFT if input_direction.x < 0 else Heading.RIGHT
-	else:
-		facing_direction = Heading.UP if input_direction.y < 0 else Heading.DOWN
+## 方向向量 → 四方向（斜向取主轴）
+func heading_from_direction(direction: Vector2) -> int:
+	if abs(direction.x) > abs(direction.y):
+		return Heading.LEFT if direction.x < 0 else Heading.RIGHT
+	return Heading.UP if direction.y < 0 else Heading.DOWN
+
+## 根据 input_direction 刷新朝向，并返回当前朝向。
+## 没有输入时保持原朝向不变。
+##
+## 返回值作为 play_animation() 的默认参数：省略 heading 时自动取它。
+func face_towards() -> int:
+	if input_direction != Vector2.ZERO:
+		# 枚举本质是 int，赋回枚举字段时编译器会提示，这里明确忽略。
+		@warning_ignore("int_as_enum_without_cast")
+		facing_direction = heading_from_direction(input_direction)
+	return facing_direction
 
 ## 取一次攻击意图：有就返回 true 并清空，没有就返回 false。
 ##
@@ -85,10 +98,11 @@ func consume_attack() -> bool:
 	return true
 
 ## 播放 "<前缀>_<朝向>" 的动画，例如 Run_Left、Idle_Up。
-## [param state_prefix] 动画名前缀，通常就是状态节点名（Idle / Run）。
-func play_animation(state_prefix: String) -> void:
-	face_towards()   # 先按当前 input_direction 刷新朝向；没有方向时保持原朝向不变
-	# 这里不做"动画名没变就跳过"的判断：
-	# 循环动画重复调用 play() 不会重播；而一次性动画（攻击/受击/死亡）需要
-	# 每次进入状态都从头播，加了判断反而会漏播。
-	animated_sprite_2d.play(state_prefix + "_" + HEADING_SUFFIX[facing_direction])
+## [param state_prefix] 动画名前缀，通常就是状态节点名（Idle / Run / Attack / Hurt）。
+## [param heading] 要播放的朝向；省略时调用 face_towards() 按输入方向刷新。
+##                  显式传入时会写回 facing_direction，保证"朝向"和"动画"一致。
+func play_animation(state_prefix: String, heading: int = face_towards()) -> void:
+	# 枚举本质是 int；显式写回字段，避免动画方向和实际朝向不一致。
+	@warning_ignore("int_as_enum_without_cast")
+	facing_direction = heading   # ★ 必须写回，否则下一次 Idle/攻击会用错方向
+	animated_sprite_2d.play(state_prefix + "_" + HEADING_SUFFIX[heading])

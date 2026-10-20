@@ -49,7 +49,7 @@ func update(_delta: float) -> void:
 	# 写成区间是为了掉帧时也能正确开关：万一从第 1 帧跳到第 3 帧，照样打得中。
 	var frame := character.animated_sprite_2d.frame
 	attack_collision_shape.disabled = not (frame >= 2 and frame <= 4)
-	#等价于attack_collision_shape.disabled = frame < 2 or frame > 4
+	# 等价于 attack_collision_shape.disabled = frame < 2 or frame > 4
 	# 一次性动画播完 → 回待机（这时如果还按着方向键，待机下一帧会再切到 Run）。
 	if not character.animated_sprite_2d.is_playing():
 		parent_state_machine.change_state("Idle")

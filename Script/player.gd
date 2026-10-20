@@ -5,6 +5,14 @@ extends BaseCharacter
 ## 特意没有 class_name：这个脚本只挂在 Scene/Player.tscn 上，不需要当类型用。
 ## 代码里要按类型判断时请用基类 BaseCharacter（敌人也继承它）。
 
+## 把自己登记到 "player" 分组，敌人通过这个分组找到当前玩家。
+##
+## 先登记再调父类 _ready()：父类会在 _ready() 里启动状态机，
+## 这样状态机跑起来的时候，玩家已经能在分组里被查到了。
+func _ready() -> void:
+	add_to_group("player")
+	super._ready()
+
 ## 每物理帧把键盘输入写进基类的 input_direction。
 ##
 ## 放在 _physics_process 而不是 _unhandled_input：Input.get_vector 是轮询式 API，
