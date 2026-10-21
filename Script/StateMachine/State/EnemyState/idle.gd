@@ -4,6 +4,13 @@ extends State
 ##
 ## 探测半径和玩家引用都放在 EnemyCharacter 上，这个状态只负责判断。
 
+## 进入待机：清掉速度和方向，避免从 Run 回来时还带着旧的运动。
+func enter(_msg: Dictionary = {}) -> void:
+	super.enter()
+	character.velocity = Vector2.ZERO
+	character.input_direction = Vector2.ZERO
+	play_animation()
+
 ## 每渲染帧：始终播待机动画，然后检查玩家是否进入范围。
 func update(_delta: float) -> void:
 	super.update(_delta)

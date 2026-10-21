@@ -3,15 +3,26 @@ class_name EnemyCharacter
 
 ## 敌人角色：在 BaseCharacter 的基础上，额外持有"当前目标（玩家）"。
 ##
-## 敌人和玩家共用 BaseCharacter 的数据、动画和状态机，
-## 这里只加两样敌人专属的东西：探测半径 + 玩家引用。
+## 敌人和玩家共用 BaseCharacter 的数据、动画和状态机；
+## 这里放敌人专属的数据：
+## - detection_radius：进入这个距离开始追；
+## - detection_escape_radius：超过这个距离放弃追击；
+## - player / get_player()：懒查找当前玩家。
 ##
-## 状态节点：Idle / Run（Hurt、Die 节点暂时没挂脚本）。
-## 目前 Idle 只做一件事：玩家进入 detection_radius 就切到 Run；
-## Run 的追击逻辑还是占位。
+## 行为逻辑在 EnemyState/ 下：
+## - Idle：待机，发现玩家后切到 Run；
+## - Run：限频计算方向并持续移动，接触玩家时造成 Hurt；
+## - Hurt / Die：暂时没有脚本。
+##
+## 注意：玩家和敌人之间没有物理碰撞（两者可以互相穿过），
+## 接触伤害完全由 Attack_Hit_box（Area2D）检测。
 
-## 发现玩家的距离（像素）。在检查器里按敌人类型单独调。
+## 发现玩家的距离（像素）：进入这个范围就切到 Run。
 @export var detection_radius := 100.0
+
+## 脱战半径（像素）：超过这个距离就放弃追击、回到 Idle。
+## 必须比 detection_radius 大，形成迟滞，避免玩家在边界来回走时状态闪烁。
+@export var detection_escape_radius := 200.0
 
 ## 当前锁定的玩家。可能为 null：玩家还没生成，或者已经被场景切换释放。
 var player: BaseCharacter

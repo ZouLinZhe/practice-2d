@@ -378,6 +378,7 @@ radius = 30.0
 [node name="Enemy" type="CharacterBody2D" unique_id=811068987]
 collision_layer = 4
 script = ExtResource("1_vmi60")
+speed = 150
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1803706372]
 sprite_frames = SubResource("SpriteFrames_bhunq")
@@ -409,3 +410,5 @@ script = ExtResource("4_n6qjc")
 [node name="Hurt" type="Node" parent="StateMachine" unique_id=1525514048]
 
 [node name="Die" type="Node" parent="StateMachine" unique_id=1926061425]
+
+[connection signal="body_entered" from="Attack_Hit_box" to="StateMachine/Run" method="_on_attack_hit_box_body_entered"]

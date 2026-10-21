@@ -2,11 +2,11 @@ extends State
 
 ## 受击状态：播放 Hurt_<朝向>，期间无敌，动画播完自动回 Idle。
 ##
-## 触发方式（计划中）：敌人攻击 Area2D 的 body_entered 信号调用
-##   state_machine.change_state("Hurt", {"from": 攻击者的 global_position})
+## 触发方式：敌人的 Attack_Hit_box（Area2D）在 Run 状态检测到玩家，
+## 调用 state_machine.change_state("Hurt", {"from": 敌人的 global_position})。
 ## 传了 "from" 就朝向攻击者播动画；没传就按输入方向刷新。
 ##
-## 目前只实现了"表现"：还没有血量/伤害入口，所以这个状态暂时不会被触发。
+## 目前只处理"表现 + 无敌"：还没有血量，扣血/死亡等以后接 take_damage()。
 
 ## 进入受击：确定朝向、播动画、开启无敌。
 func enter(_msg: Dictionary = {}) -> void:

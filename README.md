@@ -13,15 +13,15 @@
 - 攻击状态：一次性动画 + 按动画帧开关的**方向攻击框**（四个方向各一块碰撞形状）
 - 受伤状态：可按攻击来源朝向播放 Hurt 动画、无敌 2 秒（跟随暂停）、动画播完自动回 Idle
 - 角色基类 `BaseCharacter`：玩家和敌人共用的数据、动画播放与状态机启动
-- 敌人 `EnemyCharacter`：通过 `"player"` 分组找到玩家，Idle 在探测范围内切换到 Run
+- 敌人 `EnemyCharacter`：通过 `"player"` 分组找到玩家；Idle 探测 → Run 限频追击 → 超出脱战半径回 Idle
+- 接触伤害：敌人 `Attack_Hit_box` 检测到玩家时触发 Hurt；持续接触按 0.5 秒冷却重复触发
 - 场景切换：`SceneManager`（autoload）+ Main 场景的按钮
 - 验收脚本（30 项，覆盖玩家）与性能压测脚本
 
 **进行中 / 还没做**
 
-- 受伤状态还没有触发源：计划由敌人 `Attack_Hit_box` 的 `body_entered` 信号调用
-- 没有血量、`take_damage()`；玩家和敌人的 `Die` 节点都还没挂脚本
-- 敌人的 `Run` 状态还是占位，不会真正追击玩家
+- 没有血量、`take_damage()`：接触伤害目前只触发 Hurt 动画与无敌，没有扣血数值
+- 玩家和敌人的 `Die` 节点都还没挂脚本
 - 没有 HUD、暂停菜单和死亡重开流程
 
 ## 运行
@@ -63,7 +63,7 @@ Script/
         hurt.gd               玩家受击（朝向 + 无敌 + 自动回 Idle）
       EnemyState/
         idle.gd               敌人待机（探测玩家）
-        run.gd                敌人追击（占位，待实现）
+        run.gd                敌人追击（限频决策 + 脱战 + 接触伤害）
   Manager/scene_manager.gd    场景切换（autoload 名：SceneManager）
   Button/button_test1.gd      按钮脚本
 Codex文件/
@@ -80,7 +80,7 @@ Asset/                        角色、敌人动画图集与背景图
 | --- | --- |
 | `BaseCharacter` | 所有角色共有的东西：朝向、速度、加速度、`input_direction`、动画播放、状态机启动 |
 | `Player`（继承它） | 只决定"往哪走"：读键盘写进 `input_direction`，把攻击键写进 `attack_pressed`，并加入 `"player"` 分组 |
-| `EnemyCharacter`（继承它） | 敌人专属：`detection_radius`、玩家引用、`get_player()`；后续 AI 负责往 `input_direction` 写方向 |
+| `EnemyCharacter`（继承它） | 敌人专属：`detection_radius`、`detection_escape_radius`、玩家引用、`get_player()` |
 | `StateMachine` | 收集子状态、每帧把回调转发给当前状态、执行状态切换 |
 | `State`（基类） | 定义五个回调接口 + `play_animation(heading)` 转发 |
 | `Idle` / `Run` / `Attack` / `Hurt` | 具体逻辑：怎么动、什么时候切到下一个状态 |
@@ -155,6 +155,19 @@ state_machine.change_state("Hurt", {"from": attacker.global_position})
 
 传了 `from` 就朝攻击者播 `Hurt_<方向>`；没传就按输入方向刷新。`play_animation(prefix, heading)` 的 `heading` 省略时会自动调用 `face_towards()`，显式传入时会写回 `facing_direction`。
 
+### 接触伤害流程
+
+```
+玩家走进敌人的 Attack_Hit_box（mask = 玩家层）
+  → Run._on_attack_hit_box_body_entered()  立即尝试一次
+  → Run._tick_contact_damage()             持续接触时每 0.5 秒重试
+  → player.state_machine.change_state("Hurt", {"from": 敌人位置})
+```
+
+`body_entered` 只在进入瞬间触发一次，所以"一直贴着"必须靠物理帧轮询 `get_overlapping_bodies()` 补上。玩家处于无敌时会跳过伤害且不进入冷却，无敌结束后会立刻再次命中。只有 Run 状态会造成接触伤害，Idle 碰到不扣血。
+
+玩家和敌人之间**没有物理碰撞**（两者可以互相穿过），伤害完全由 Area2D 负责。
+
 ### 加一个新状态要做什么
 
 1. 在角色的 `StateMachine` 下新建 Node，**节点名就是动画名前缀**（比如 `Hurt` 对应 `Hurt_Up` / `Hurt_Down` …）
@@ -211,21 +224,23 @@ godot --headless --path . -s res://Codex文件/bench_enemies.gd
 9. **覆盖 `_ready()` 必须调 `super._ready()`。** 否则父类里启动状态机的代码不会执行（敌人一开始就踩过）
 10. **找玩家用分组，不要硬编码路径。** `get_tree().root.get_node("Scene/Player")` 这种写法在单独运行场景、换场景、玩家改名时都会失败；用 `"player"` 分组 + `is_instance_valid` 懒查找
 11. **动画名拼写要在四个方向上都核对。** 项目里出现过两次 `Letf`（应为 `Left`），表现是朝左时动画不播、输出面板报 `There is no animation with name ...`
+12. **`body_entered` 只在进入瞬间触发一次。** 持续接触要在物理帧轮询 `get_overlapping_bodies()`（配合冷却），否则玩家贴着敌人只会掉一次血
 
 ## 已知限制（当前阶段）
 
-- `Hurt` 状态没有伤害来源：敌人攻击框还没接 `body_entered` 信号，也没有血量/`take_damage()`
+- 没有血量与 `take_damage()`：接触伤害只触发动画和无敌，没有扣血
 - 玩家和敌人的 `Die` 节点都没有脚本，进不了死亡状态
-- 敌人的 `Run` 是空实现，敌人只会从 Idle 切到 Run，不会移动
+- 敌人的 `Hurt` / `Die` 状态还没有实现
 - 没有 HUD、暂停菜单、死亡重开
 
 ## 后续计划
 
-- [ ] 血量、`take_damage()`，并由敌人攻击框信号触发 `Hurt`
+- [ ] 血量、`take_damage()`，把接触伤害收口成数值伤害
 - [ ] `Die` 状态（玩家 / 敌人）+ 死亡后重开
-- [ ] 敌人 `Run`：追击、超出范围回 Idle
+- [x] 敌人 `Run`：限频追击、超出范围回 Idle
+- [x] 接触伤害：敌人攻击框 + 冷却触发玩家 Hurt
 - [ ] 敌人 `Hurt` / `Die` 状态脚本
-- [ ] 把敌人的"探测 → Run"行为加入验收脚本
+- [ ] 把敌人的追击 / 脱战 / 接触伤害加入验收脚本
 - [ ] 小重构：`input_direction` → `move_direction`；`HEADING_SUFFIX` 标注成 `Array[String]`；移动逻辑收成 `BaseCharacter` 的动词
 
 ## 素材
