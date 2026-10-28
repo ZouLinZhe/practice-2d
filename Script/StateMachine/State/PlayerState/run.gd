@@ -16,10 +16,10 @@ func update(_delta: float) -> void:
 		parent_state_machine.change_state("Attack")
 		return
 	# 方向归零 → 回到待机。
-	if character.input_direction == Vector2.ZERO:
+	if character.move_direction == Vector2.ZERO:
 		parent_state_machine.change_state("Idle")
 		return   # 必须 return：下面要按方向播动画、算速度，零向量没有意义
-	# 播放 Run_<朝向>：play_animation() 内部会先按 input_direction 刷新朝向。
+	# 播放 Run_<朝向>：play_animation() 内部会先按 move_direction 刷新朝向。
 	# 循环动画重复 play() 不会重播，所以每帧调用是安全的。
 	play_animation()
 
@@ -29,6 +29,6 @@ func physics_update(_delta: float) -> void:
 	# 用 lerp 做速度过渡：accelerate 越大越跟手、越小越滑。
 	# _delta * accelerate 是"这一帧追上去的比例"，所以它和帧率无关。
 	character.velocity = character.velocity.lerp(
-		character.input_direction * character.speed,
+		character.move_direction * character.speed,
 		_delta * character.accelerate)
 	character.move_and_slide()

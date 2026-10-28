@@ -8,7 +8,7 @@ extends State
 func enter(_msg: Dictionary = {}) -> void:
 	super.enter()
 	character.velocity = Vector2.ZERO
-	character.input_direction = Vector2.ZERO
+	character.move_direction = Vector2.ZERO
 	play_animation()
 
 ## 每渲染帧：始终播待机动画，然后检查玩家是否进入范围。

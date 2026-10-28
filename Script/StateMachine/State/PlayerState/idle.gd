@@ -25,5 +25,5 @@ func update(_delta: float) -> void:
 		return
 	# 方向来自角色本身：玩家由 player.gd 每帧写入，敌人以后由 AI 写入。
 	# 状态不直接读键盘，这样同一套状态才能同时给玩家和敌人用。
-	if character.input_direction != Vector2.ZERO:
+	if character.move_direction != Vector2.ZERO:
 		parent_state_machine.change_state("Run")

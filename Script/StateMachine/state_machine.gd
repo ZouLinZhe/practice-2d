@@ -15,7 +15,8 @@ extends Node
 ##        ├─ Idle   ← initial_state 指向它
 ##        ├─ Run
 ##        ├─ Attack
-##        └─ Hurt      （Die 节点暂时没挂脚本）
+##        ├─ Hurt
+##        └─ Die
 
 ## 初始状态，在检查器里指定（本例指向 Idle 节点）。
 @export var initial_state: State
@@ -32,7 +33,7 @@ var character: BaseCharacter
 ## 收集子状态并注入引用。这里不进入初始状态，那一步交给 start()。
 func _ready() -> void:
 	# 父节点必须是 BaseCharacter 的子类（玩家或敌人）：
-	# 状态里会访问 character.velocity / input_direction，父节点不对就会出错。
+	# 状态里会访问 character.velocity / move_direction，父节点不对就会出错。
 	character = get_parent() as BaseCharacter
 	if character == null:
 		push_error("状态机的父节点必须是 BaseCharacter 的子类")

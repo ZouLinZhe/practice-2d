@@ -16,7 +16,7 @@ var attack_collision_shape: CollisionShape2D
 ## 进入攻击：播攻击动画，挑出这一刀要用的攻击框（先关着，挥到第 2 帧才打开）。
 func enter(_msg: Dictionary = {}) -> void:
 	super.enter()
-	play_animation()   # 内部会先按 input_direction 刷新朝向，再播 Attack_<朝向>
+	play_animation()   # 内部会先按 move_direction 刷新朝向，再播 Attack_<朝向>
 	if attack_hit_box == null:
 		push_error(str(name) + " 找不到 Attack_Hit_Box 节点")
 		return
@@ -28,13 +28,13 @@ func enter(_msg: Dictionary = {}) -> void:
 	if attack_collision_shape == null:
 		push_error("找不到攻击框节点：" + suffix + "_Hitbox")
 		return
-	attack_collision_shape.disabled = true   # 先关掉，等动画挥到第 2 帧再打开
+	attack_collision_shape.set_deferred("disabled", true)   # 先关掉，等动画挥到第 2 帧再打开
 
 ## 离开攻击：不管是正常播完还是被别的状态打断，都把攻击框关掉。
 func exit() -> void:
 	super.exit()
 	if attack_collision_shape:
-		attack_collision_shape.disabled = true
+		attack_collision_shape.set_deferred("disabled", true)
 
 ## 每帧：按动画帧开关攻击框，动画播完就回 Idle。
 func update(_delta: float) -> void:
@@ -53,3 +53,14 @@ func update(_delta: float) -> void:
 	# 一次性动画播完 → 回待机（这时如果还按着方向键，待机下一帧会再切到 Run）。
 	if not character.animated_sprite_2d.is_playing():
 		parent_state_machine.change_state("Idle")
+
+## 攻击框碰到敌人时造成伤害。
+## 信号在 Player.tscn 里连接：Attack_Hit_Box.body_entered → Attack。
+## 敌人的受击无敌会挡住同一挥砍内的重复触发。
+func _on_attack_hit_box_body_entered(body: Node2D) -> void:
+	if not body is EnemyCharacter:
+		return
+	var enemy := body as EnemyCharacter
+	if enemy.is_dead or enemy.is_invincible:
+		return
+	enemy.take_damage(character.damage, character.global_position)

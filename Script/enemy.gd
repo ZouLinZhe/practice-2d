@@ -11,8 +11,9 @@ class_name EnemyCharacter
 ##
 ## 行为逻辑在 EnemyState/ 下：
 ## - Idle：待机，发现玩家后切到 Run；
-## - Run：限频计算方向并持续移动，接触玩家时造成 Hurt；
-## - Hurt / Die：暂时没有脚本。
+## - Run：限频计算方向并持续移动；接触玩家时调用 take_damage；
+## - Hurt：短硬直 + 0.2 秒无敌，然后回到 Run / Idle；
+## - Die：播放死亡动画、关闭碰撞并释放自己。
 ##
 ## 注意：玩家和敌人之间没有物理碰撞（两者可以互相穿过），
 ## 接触伤害完全由 Attack_Hit_box（Area2D）检测。
@@ -30,7 +31,7 @@ var player: BaseCharacter
 func _ready() -> void:
 	# 先尝试找一次；找不到也没关系，get_player() 会在需要时再查。
 	player = get_tree().get_first_node_in_group("player") as BaseCharacter
-	# 覆盖 _ready 时一定要调父类：BaseCharacter._ready() 负责启动状态机。
+	# 覆盖 _ready 时一定要调父类：BaseCharacter._ready() 负责初始化血量并启动状态机。
 	super._ready()
 
 ## 获取当前玩家；引用为空或已失效时重新查一次分组。

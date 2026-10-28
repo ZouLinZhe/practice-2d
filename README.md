@@ -9,20 +9,25 @@
 **已完成**
 
 - 玩家四方向移动，带加速度过渡（起步渐快）
-- 四方向朝向系统（枚举 + 动画后缀表），Idle / Run / Attack / Hurt 共 16 条动画
-- 攻击状态：一次性动画 + 按动画帧开关的**方向攻击框**（四个方向各一块碰撞形状）
-- 受伤状态：可按攻击来源朝向播放 Hurt 动画、无敌 2 秒（跟随暂停）、动画播完自动回 Idle
-- 角色基类 `BaseCharacter`：玩家和敌人共用的数据、动画播放与状态机启动
+- 四方向朝向系统（枚举 + 动画后缀表）；玩家 20 条动画（Idle/Run/Attack/Hurt/Die ×4），敌人 16 条（Idle/Run/Hurt/Die ×4）
+- 状态机：玩家 Idle/Run/Attack/Hurt/Die，敌人 Idle/Run/Hurt/Die
+- 攻击状态：一次性动画 + 按动画帧开关的**方向攻击框**；命中调用 `take_damage`
+- 生命系统：`BaseCharacter` 提供 `max_health` / `health` / `take_damage()` / `is_dead`，以及 `health_changed`、`died` 信号
+- 无敌计时：每个角色一个 `InvincibleTimer`（玩家 2 秒、敌人 0.2 秒），重复受击会重新计时
+- 受伤：按攻击来源朝向播放 Hurt；玩家播完回 Idle，敌人短硬直后回 Run/Idle
+- 死亡：敌人播放 Die_*、关闭碰撞与攻击框、约 1.1 秒后释放；玩家播放 Die_*（结算流程待接）
 - 敌人 `EnemyCharacter`：通过 `"player"` 分组找到玩家；Idle 探测 → Run 限频追击 → 超出脱战半径回 Idle
-- 接触伤害：敌人 `Attack_Hit_box` 检测到玩家时触发 Hurt；持续接触按 0.5 秒冷却重复触发
+- 接触伤害：敌人攻击框 + 持续接触轮询（0.5 秒冷却）→ 玩家 `take_damage`
 - 场景切换：`SceneManager`（autoload）+ Main 场景的按钮
 - 验收脚本（30 项，覆盖玩家）与性能压测脚本
 
 **进行中 / 还没做**
 
-- 没有血量、`take_damage()`：接触伤害目前只触发 Hurt 动画与无敌，没有扣血数值
-- 玩家和敌人的 `Die` 节点都还没挂脚本
-- 没有 HUD、暂停菜单和死亡重开流程
+- 玩家死亡后的 Game Over / 重开流程
+- HUD（血条）、暂停菜单
+- "撑过一晚"的计时/波次与敌人管理器
+- 关卡内容（TileMap、障碍）、采集/建造、VFX、音效
+- 更完整的伤害验收（玩家攻击 / 敌人接触 / 死亡）
 
 ## 运行
 
@@ -45,8 +50,8 @@
 ```
 Scene/
   Main.tscn                   入口场景（一个"跳转"按钮）
-  Player.tscn                 玩家：碰撞 + 16 条动画 + 状态机 + 攻击框
-  enemy.tscn                  敌人：碰撞 + 8 条动画 + 状态机 + 攻击框
+  Player.tscn                 玩家：碰撞 + 20 条动画 + 状态机 + 攻击框 + 无敌计时器
+  enemy.tscn                  敌人：碰撞 + 16 条动画 + 状态机 + 攻击框 + 无敌计时器
   test_scene1.tscn            测试场景（玩家 + 敌人 + 一张背景图）
 Script/
   base_character.gd           角色基类：数据、动画、状态机启动
@@ -56,14 +61,17 @@ Script/
     state_machine.gd          状态机：收集状态、每帧转发、change_state
     State/
       state.gd                状态基类：五个回调 + play_animation
+      die.gd                  玩家死亡（目前只播动画）
       PlayerState/
         idle.gd               玩家待机
         run.gd                玩家移动
         attack.gd             玩家攻击（含方向攻击框）
-        hurt.gd               玩家受击（朝向 + 无敌 + 自动回 Idle）
+        hurt.gd               玩家受击（朝向 + 2 秒无敌 + 回 Idle）
       EnemyState/
         idle.gd               敌人待机（探测玩家）
         run.gd                敌人追击（限频决策 + 脱战 + 接触伤害）
+        hurt.gd               敌人受击（0.2 秒硬直 + 无敌）
+        die.gd                敌人死亡（关碰撞 + 播放动画 + 释放）
   Manager/scene_manager.gd    场景切换（autoload 名：SceneManager）
   Button/button_test1.gd      按钮脚本
 Codex文件/
@@ -78,28 +86,29 @@ Asset/                        角色、敌人动画图集与背景图
 
 | 谁 | 负责什么 |
 | --- | --- |
-| `BaseCharacter` | 所有角色共有的东西：朝向、速度、加速度、`input_direction`、动画播放、状态机启动 |
-| `Player`（继承它） | 只决定"往哪走"：读键盘写进 `input_direction`，把攻击键写进 `attack_pressed`，并加入 `"player"` 分组 |
+| `BaseCharacter` | 所有角色共有的东西：朝向、速度、加速度、`move_direction`、动画播放、状态机启动 |
+| `Player`（继承它） | 只决定"往哪走"：读键盘写进 `move_direction`，把攻击键写进 `attack_pressed`，并加入 `"player"` 分组 |
 | `EnemyCharacter`（继承它） | 敌人专属：`detection_radius`、`detection_escape_radius`、玩家引用、`get_player()` |
 | `StateMachine` | 收集子状态、每帧把回调转发给当前状态、执行状态切换 |
 | `State`（基类） | 定义五个回调接口 + `play_animation(heading)` 转发 |
 | `Idle` / `Run` / `Attack` / `Hurt` | 具体逻辑：怎么动、什么时候切到下一个状态 |
 
-关键设计：**状态不自己读键盘**。它只读角色的 `input_direction`（移动意图）和 `consume_attack()`（攻击意图），所以同一套状态能同时服务玩家和敌人。
+关键设计：**状态不自己读键盘**。它只读角色的 `move_direction`（移动意图）和 `consume_attack()`（攻击意图），所以同一套状态能同时服务玩家和敌人。
 
 ### 玩家场景结构（Player.tscn）
 
 ```
 Player (CharacterBody2D)         ← player.gd（继承 BaseCharacter），layer = 玩家层（2）
 ├─ CollisionShape2D              身体碰撞（胶囊，radius 10 / height 30）
-├─ AnimatedSprite2D              16 条动画：Idle_/Run_/Attack_/Hurt_ × 上/下/左/右
+├─ AnimatedSprite2D              20 条动画：Idle_/Run_/Attack_/Hurt_/Die_ × 上/下/左/右
 ├─ Camera2D                      跟随
+├─ InvincibleTimer (Timer)       2.0 秒，one_shot
 ├─ StateMachine                  ← state_machine.gd，initial_state = Idle
 │  ├─ Idle                       ← idle.gd
 │  ├─ Run                        ← run.gd
 │  ├─ Attack                     ← attack.gd
 │  ├─ Hurt                       ← hurt.gd
-│  └─ Die                        （暂时没有脚本，不会注册进状态池）
+│  └─ Die                        ← State/die.gd（结算流程待接）
 └─ Attack_Hit_Box (Area2D)       攻击判定区（layer 0 / mask 4，只检测敌人层）
    ├─ Up_Hitbox / Down_Hitbox / Left_Hitbox / Right_Hitbox  (CollisionShape2D)
 ```
@@ -108,15 +117,16 @@ Player (CharacterBody2D)         ← player.gd（继承 BaseCharacter），layer
 
 ```
 Enemy (CharacterBody2D)          ← enemy.gd（EnemyCharacter，继承 BaseCharacter），layer = 敌人层（4）
-├─ AnimatedSprite2D              8 条动画：Idle_/Run_ × 上/下/左/右
+├─ AnimatedSprite2D              16 条动画：Idle_/Run_/Hurt_/Die_ × 上/下/左/右
 ├─ CollisionShape2D              身体碰撞（圆形）
 ├─ Attack_Hit_box (Area2D)       接触伤害判定区（layer 0 / mask 2，只检测玩家层）
 │  └─ CollisionShape2D
+├─ InvincibleTimer (Timer)       0.2 秒，one_shot
 └─ StateMachine                  initial_state = Idle
    ├─ Idle                       ← EnemyState/idle.gd
-   ├─ Run                        ← EnemyState/run.gd（占位）
-   ├─ Hurt                       （暂时没有脚本）
-   └─ Die                        （暂时没有脚本）
+   ├─ Run                        ← EnemyState/run.gd
+   ├─ Hurt                       ← EnemyState/hurt.gd
+   └─ Die                        ← EnemyState/die.gd
 ```
 
 ### 状态机的调用流程
@@ -131,6 +141,26 @@ change_state("Run")           → 旧状态 exit() → 新状态 enter(msg)
 启动顺序有个坑：Godot 的 `_ready()` 是**子节点先于父节点**执行，而 `@onready` 变量在各自 `_ready()` 之前才赋值。所以状态机不能在自己的 `_ready()` 里进入初始状态（那时 `character.animated_sprite_2d` 还是 `null`）。改由 `BaseCharacter._ready()` 调用 `state_machine.start()`，保证所有引用都就位了再进第一个状态。
 
 **子类覆盖 `_ready()` 时必须调用 `super._ready()`**，否则父类里启动状态机的代码不会执行——敌人的 `EnemyCharacter._ready()` 就是这个写法。
+
+### 生命与伤害
+
+`BaseCharacter` 为玩家和敌人提供同一套生命接口：
+
+- `max_health` / `health`（在 `_ready()` 里初始化）
+- `take_damage(amount, from_position) -> bool`
+- `is_dead` / `is_invincible`
+- `health_changed(current, max)` / `died` 信号
+
+伤害链路：
+
+```
+玩家攻击框 body_entered → enemy.take_damage(player.damage, player.global_position)
+敌人接触（信号 + 轮询） → player.take_damage(enemy.damage, enemy.global_position)
+        ↓
+扣血 → 血量归零切 Die，否则切 Hurt
+```
+
+无敌时长由各角色场景的 `InvincibleTimer` 决定（玩家 2 秒、敌人 0.2 秒）；重复受击会重新计时。
 
 ### 敌人怎么找到玩家
 
@@ -161,7 +191,7 @@ state_machine.change_state("Hurt", {"from": attacker.global_position})
 玩家走进敌人的 Attack_Hit_box（mask = 玩家层）
   → Run._on_attack_hit_box_body_entered()  立即尝试一次
   → Run._tick_contact_damage()             持续接触时每 0.5 秒重试
-  → player.state_machine.change_state("Hurt", {"from": 敌人位置})
+  → player.take_damage(character.damage, character.global_position)
 ```
 
 `body_entered` 只在进入瞬间触发一次，所以"一直贴着"必须靠物理帧轮询 `get_overlapping_bodies()` 补上。玩家处于无敌时会跳过伤害且不进入冷却，无敌结束后会立刻再次命中。只有 Run 状态会造成接触伤害，Idle 碰到不扣血。
@@ -228,20 +258,24 @@ godot --headless --path . -s res://Codex文件/bench_enemies.gd
 
 ## 已知限制（当前阶段）
 
-- 没有血量与 `take_damage()`：接触伤害只触发动画和无敌，没有扣血
-- 玩家和敌人的 `Die` 节点都没有脚本，进不了死亡状态
-- 敌人的 `Hurt` / `Die` 状态还没有实现
-- 没有 HUD、暂停菜单、死亡重开
+- 玩家死亡后的 Game Over / 重开还没接；`State/die.gd` 目前只播放死亡动画
+- 没有 HUD（血条）、暂停菜单
+- 没有"撑过一晚"的计时/胜利条件，也没有敌人生成器
+- 关卡只有一张背景图，没有 TileMap、障碍和导航
+- 没有采集/建造、VFX、音效
 
 ## 后续计划
 
-- [ ] 血量、`take_damage()`，把接触伤害收口成数值伤害
-- [ ] `Die` 状态（玩家 / 敌人）+ 死亡后重开
+- [x] 生命值、`take_damage()`、受伤与无敌计时
+- [x] 敌人 `Hurt` / `Die` 状态
+- [x] 玩家攻击 / 敌人接触接入 `take_damage`
+- [ ] 玩家 `Die` 的 Game Over / 重开
+- [ ] HUD（血条）
+- [ ] 敌人管理器 / 波次与"撑过一晚"的计时/胜利条件
 - [x] 敌人 `Run`：限频追击、超出范围回 Idle
 - [x] 接触伤害：敌人攻击框 + 冷却触发玩家 Hurt
-- [ ] 敌人 `Hurt` / `Die` 状态脚本
 - [ ] 把敌人的追击 / 脱战 / 接触伤害加入验收脚本
-- [ ] 小重构：`input_direction` → `move_direction`；`HEADING_SUFFIX` 标注成 `Array[String]`；移动逻辑收成 `BaseCharacter` 的动词
+- [ ] 小重构：`HEADING_SUFFIX` 标注成 `Array[String]`；移动逻辑收成 `BaseCharacter` 的动词
 
 ## 素材
 

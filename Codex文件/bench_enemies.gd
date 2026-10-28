@@ -73,9 +73,9 @@ func _sample(enemies: Array, frames: int, chase: bool) -> Vector2:
 		for e in enemies:
 			if chase:
 				var dir: Vector2 = (Vector2.ZERO - e.position).normalized()
-				e.input_direction = dir if dir != Vector2.ZERO else Vector2.RIGHT
+				e.move_direction = dir if dir != Vector2.ZERO else Vector2.RIGHT
 			else:
-				e.input_direction = Vector2.RIGHT
+				e.move_direction = Vector2.RIGHT
 		await physics_frame
 		process_ms += Performance.get_monitor(Performance.TIME_PROCESS)
 		physics_ms += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)

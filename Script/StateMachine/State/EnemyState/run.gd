@@ -44,7 +44,7 @@ func update(delta: float) -> void:
 ## 每个物理帧：按上一次算好的方向平滑移动，并处理持续接触伤害。
 func physics_update(delta: float) -> void:
 	super.physics_update(delta)
-	character.velocity = character.input_direction * character.speed
+	character.velocity = character.move_direction * character.speed
 	character.move_and_slide()
 	_tick_contact_damage(delta)
 
@@ -57,7 +57,7 @@ func _think() -> void:
 	if target == null or enemy.global_position.distance_to(target.global_position) > enemy.detection_escape_radius:
 		parent_state_machine.change_state("Idle")
 		return
-	enemy.input_direction = (target.global_position - enemy.global_position).normalized()
+	enemy.move_direction = (target.global_position - enemy.global_position).normalized()
 
 ## 玩家刚进入接触范围时立即尝试一次伤害。
 ## 信号在 enemy.tscn 里连接：Attack_Hit_box.body_entered → Run._on_attack_hit_box_body_entered。
@@ -77,15 +77,17 @@ func _tick_contact_damage(delta: float) -> void:
 	var hit_box: Area2D = character.get_node_or_null("Attack_Hit_box")
 	if hit_box == null:
 		return
+	if not hit_box.monitoring:      # ← 放在这里
+		return                      # monitoring 关闭时查询重叠会报错
 	for body in hit_box.get_overlapping_bodies():
 		if body is BaseCharacter:
 			_try_damage(body as BaseCharacter)
-			return   # 同一帧只打一次
+			return
 
 ## 尝试对玩家造成一次接触伤害。
 ## 玩家无敌时直接跳过，并且**不进入冷却**——这样无敌结束后会马上再次命中。
 func _try_damage(player: BaseCharacter) -> void:
-	if player.is_invincible:
+	if player.is_invincible or player.is_dead:
 		return
-	player.state_machine.change_state("Hurt", {"from": character.global_position})
-	_damage_cooldown = DAMAGE_COOLDOWN
+	if player.take_damage(character.damage, character.global_position):
+		_damage_cooldown = DAMAGE_COOLDOWN
