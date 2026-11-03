@@ -39,7 +39,7 @@ signal died
 ## 最大生命值：可以在各角色场景的检查器里覆盖。
 @export var max_health: int = 100
 
-## 受伤后的无敌时长（秒）。玩家场景设为 2.0，敌人场景设为 0.2。
+## 受伤后的无敌时长（秒）。玩家场景设为 2.0，敌人场景设为 0.25。
 @export var invincible_time := 1.0
 
 ## 受击时角色被推开的初始速度（像素/秒）。
@@ -75,6 +75,7 @@ var attack_pressed := false
 ## 受伤后的无敌标记：true 时免疫伤害。
 ##
 ## 由 Hurt 状态在进入时置 true、计时结束后置 false。
+## 死亡时会停止计时器并立即清除，避免残留无敌状态。
 ## take_damage() 会检查它，所以攻击方提前返回只是优化，不是唯一防线。
 var is_invincible = false
 
@@ -150,7 +151,7 @@ func play_animation(state_prefix: String, heading: int = face_towards()) -> void
 ## 受到伤害。返回是否真的生效。
 ##
 ## - 已死亡、无敌或非正伤害 → 返回 false；
-## - 血量归零 → 置 is_dead、发 died 信号并切到 Die；
+## - 血量归零 → 置 is_dead、发 died 信号并带着攻击来源切到 Die；
 ## - 否则切到 Hurt，并带上攻击来源位置用于受击朝向。
 ## [param amount] 本次实际扣除的生命值。
 ## [param from_position] 伤害来源的世界坐标，默认为零向量。

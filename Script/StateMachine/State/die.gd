@@ -3,7 +3,8 @@ extends State
 ## 玩家死亡状态。
 ##
 ## 负责播放死亡动画、停止移动和无敌计时，并关闭角色碰撞与攻击框。
-## Game Over 界面和重开流程暂未接入。
+## 动画结束后释放玩家，再通过 SceneManager 返回 Main 场景。
+## 当前不包含独立的 Game Over 界面或结算系统。
 @onready var collision_shape_2d: CollisionShape2D = $"../../CollisionShape2D"
 @onready var attack_hit_box: Area2D = $"../../Attack_Hit_Box"
 
@@ -33,7 +34,7 @@ func enter(msg: Dictionary = {}) -> void:
 
 func update(_delta: float) -> void:
 	super.update(_delta)
-	# 死亡动画只播放一次；结束后释放玩家，后续可在这里通知 Game Over。
+	# 死亡动画只播放一次；结束后释放玩家并返回 Main 场景。
 	if not character.animated_sprite_2d.is_playing():
 		character.queue_free()
 		SceneManager.change_scene("res://Scene/Main.tscn")

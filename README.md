@@ -13,21 +13,21 @@
 - 状态机：玩家 Idle/Run/Attack/Hurt/Die，敌人 Idle/Run/Hurt/Die
 - 攻击状态：一次性动画 + 按动画帧开关的**方向攻击框**；命中调用 `take_damage`
 - 生命系统：`BaseCharacter` 提供 `max_health` / `health` / `take_damage()` / `is_dead`，以及 `health_changed`、`died` 信号
-- 无敌计时：每个角色一个 `InvincibleTimer`（玩家 2 秒、敌人 0.2 秒），重复受击会重新计时
+- 无敌计时：每个角色一个 `InvincibleTimer`（玩家 2 秒、敌人 0.25 秒），重复受击会重新计时
 - 受伤：按攻击来源朝向播放 Hurt；玩家播完回 Idle，敌人短硬直后回 Run/Idle
-- 死亡：敌人播放 Die_*、关闭碰撞与攻击框、约 1.1 秒后释放；玩家播放 Die_*（结算流程待接）
-- 敌人 `EnemyCharacter`：通过 `"player"` 分组找到玩家；Idle 探测 → Run 限频追击 → 超出脱战半径回 Idle
+- 受击击退：玩家和敌人都会远离攻击者，击退速度在短时间内衰减到零
+- 死亡：敌人播放 Die_*、关闭碰撞与攻击框、约 1.1 秒后释放；玩家播放 Die_* 后返回 Main 场景
+- 敌人 `EnemyCharacter`：通过 `"player"` 分组找到玩家；Idle 探测 → Run 限频追击 → 进入攻击距离停下 → 超出脱战半径回 Idle
 - 接触伤害：敌人攻击框 + 持续接触轮询（0.5 秒冷却）→ 玩家 `take_damage`
 - 场景切换：`SceneManager`（autoload）+ Main 场景的按钮
 - 验收脚本（30 项，覆盖玩家）与性能压测脚本
 
-**进行中 / 还没做**
+**当前项目范围外**
 
-- 玩家死亡后的 Game Over / 重开流程
+- 独立 Game Over 界面和结算界面
 - HUD（血条）、暂停菜单
 - "撑过一晚"的计时/波次与敌人管理器
 - 关卡内容（TileMap、障碍）、采集/建造、VFX、音效
-- 更完整的伤害验收（玩家攻击 / 敌人接触 / 死亡）
 
 ## 运行
 
@@ -61,16 +61,16 @@ Script/
     state_machine.gd          状态机：收集状态、每帧转发、change_state
     State/
       state.gd                状态基类：五个回调 + play_animation
-      die.gd                  玩家死亡（目前只播动画）
+      die.gd                  玩家死亡（朝向攻击者、清理碰撞、返回 Main）
       PlayerState/
         idle.gd               玩家待机
         run.gd                玩家移动
         attack.gd             玩家攻击（含方向攻击框）
-        hurt.gd               玩家受击（朝向 + 2 秒无敌 + 回 Idle）
+        hurt.gd               玩家受击（朝向 + 2 秒无敌 + 击退 + 回 Idle）
       EnemyState/
         idle.gd               敌人待机（探测玩家）
-        run.gd                敌人追击（限频决策 + 脱战 + 接触伤害）
-        hurt.gd               敌人受击（0.2 秒硬直 + 无敌）
+        run.gd                敌人追击（限频决策 + 停止距离 + 脱战 + 接触伤害）
+        hurt.gd               敌人受击（0.2 秒硬直 + 0.25 秒无敌 + 击退）
         die.gd                敌人死亡（关碰撞 + 播放动画 + 释放）
   Manager/scene_manager.gd    场景切换（autoload 名：SceneManager）
   Button/button_test1.gd      按钮脚本
@@ -108,7 +108,7 @@ Player (CharacterBody2D)         ← player.gd（继承 BaseCharacter），layer
 │  ├─ Run                        ← run.gd
 │  ├─ Attack                     ← attack.gd
 │  ├─ Hurt                       ← hurt.gd
-│  └─ Die                        ← State/die.gd（结算流程待接）
+│  └─ Die                        ← State/die.gd（死亡动画后返回 Main）
 └─ Attack_Hit_Box (Area2D)       攻击判定区（layer 0 / mask 4，只检测敌人层）
    ├─ Up_Hitbox / Down_Hitbox / Left_Hitbox / Right_Hitbox  (CollisionShape2D)
 ```
@@ -149,6 +149,7 @@ change_state("Run")           → 旧状态 exit() → 新状态 enter(msg)
 - `max_health` / `health`（在 `_ready()` 里初始化）
 - `take_damage(amount, from_position) -> bool`
 - `is_dead` / `is_invincible`
+- `knockback_speed` / `knockback_duration`
 - `health_changed(current, max)` / `died` 信号
 
 伤害链路：
@@ -160,7 +161,20 @@ change_state("Run")           → 旧状态 exit() → 新状态 enter(msg)
 扣血 → 血量归零切 Die，否则切 Hurt
 ```
 
-无敌时长由各角色场景的 `InvincibleTimer` 决定（玩家 2 秒、敌人 0.2 秒）；重复受击会重新计时。
+无敌时长由各角色场景的 `InvincibleTimer` 决定（玩家 2 秒、敌人 0.25 秒）；重复受击会重新计时。
+
+### 受击击退
+
+`BaseCharacter` 提供 `knockback_speed`（默认 300 像素/秒）和
+`knockback_duration`（默认 0.18 秒）。玩家和敌人的 Hurt 状态都使用同一套流程：
+
+```
+攻击者位置 → 计算从攻击者指向自己的方向 → 取反得到击退方向
+          → Hurt 的 physics_update() 执行 move_and_slide()
+          → 击退速度随时间衰减，结束后清零
+```
+
+击退发生在 Hurt 状态中，Hurt 不读取 `move_direction`，因此玩家在受击期间按键不会抵消击退。敌人则会先完成短硬直，再根据与玩家的距离回到 Run 或 Idle。
 
 ### 敌人怎么找到玩家
 
@@ -258,7 +272,7 @@ godot --headless --path . -s res://Codex文件/bench_enemies.gd
 
 ## 已知限制（当前阶段）
 
-- 玩家死亡后的 Game Over / 重开还没接；`State/die.gd` 目前只播放死亡动画
+- 当前项目以状态机和战斗闭环为练习目标，玩家死亡动画结束后直接返回 Main，不实现独立 Game Over 结算
 - 没有 HUD（血条）、暂停菜单
 - 没有"撑过一晚"的计时/胜利条件，也没有敌人生成器
 - 关卡只有一张背景图，没有 TileMap、障碍和导航
@@ -269,10 +283,11 @@ godot --headless --path . -s res://Codex文件/bench_enemies.gd
 - [x] 生命值、`take_damage()`、受伤与无敌计时
 - [x] 敌人 `Hurt` / `Die` 状态
 - [x] 玩家攻击 / 敌人接触接入 `take_damage`
-- [ ] 玩家 `Die` 的 Game Over / 重开
+- [x] 玩家 `Die`：死亡朝向、碰撞清理和返回 Main
+- [x] 玩家与敌人受击击退
 - [ ] HUD（血条）
 - [ ] 敌人管理器 / 波次与"撑过一晚"的计时/胜利条件
-- [x] 敌人 `Run`：限频追击、超出范围回 Idle
+- [x] 敌人 `Run`：限频追击、攻击距离停止、超出范围回 Idle
 - [x] 接触伤害：敌人攻击框 + 冷却触发玩家 Hurt
 - [ ] 把敌人的追击 / 脱战 / 接触伤害加入验收脚本
 - [ ] 小重构：`HEADING_SUFFIX` 标注成 `Array[String]`；移动逻辑收成 `BaseCharacter` 的动词

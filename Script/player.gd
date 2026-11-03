@@ -19,6 +19,7 @@ func _ready() -> void:
 ## 每帧读一次最稳，不会因为 UI 抢走事件而丢输入。
 ## 角色的 _physics_process 比子节点状态机先执行，所以状态拿到的永远是本帧最新值。
 func _physics_process(_delta: float) -> void:
+	# 死亡后从输入源头停止写入，避免覆盖 Die 状态清零的移动和攻击意图。
 	if is_dead:
 		move_direction = Vector2.ZERO
 		attack_pressed = false

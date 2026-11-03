@@ -2,8 +2,8 @@ extends State
 
 ## 敌人受击：短硬直、短暂无敌和击退，然后回到 Run 或 Idle。
 ##
-## 无敌时长来自 enemy.tscn 的 invincible_time（0.2 秒），
-## HURT_DURATION 与它保持一致：硬直结束就恢复行动。
+## 硬直时长由 HURT_DURATION 控制；无敌时长来自 enemy.tscn 的
+## invincible_time（当前为 0.25 秒）。硬直会先结束，随后恢复 Run / Idle。
 
 ## 受击硬直时长（秒）。
 const HURT_DURATION := 0.2

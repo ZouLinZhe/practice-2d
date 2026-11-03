@@ -42,6 +42,7 @@ func enter(msg: Dictionary = {}) -> void:
 	character.start_invincibility()
 
 ## 每个物理帧执行击退，并按剩余时间线性降低速度。
+## Hurt 状态不读取 move_direction，因此玩家输入不会覆盖这段击退位移。
 func physics_update(delta: float) -> void:
 	super.physics_update(delta)
 	if _knockback_time_left <= 0.0:
