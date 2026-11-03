@@ -25,6 +25,14 @@ class_name EnemyCharacter
 ## 必须比 detection_radius 大，形成迟滞，避免玩家在边界来回走时状态闪烁。
 @export var detection_escape_radius := 200.0
 
+## 攻击停止距离（像素）：玩家进入这个范围后，敌人停止移动，避免穿过玩家后来回反向。
+## 应略小于接触攻击框的实际覆盖范围，当前可以围绕 24 像素调整。
+@export var attack_stop_distance := 24.0
+
+## 重新追击距离（像素）：已经停在玩家身边后，只有玩家拉开到这个距离才再次追击。
+## 比 attack_stop_distance 大，形成迟滞，避免在边界附近反复启动和停止。
+@export var chase_resume_distance := 36.0
+
 ## 当前锁定的玩家。可能为 null：玩家还没生成，或者已经被场景切换释放。
 var player: BaseCharacter
 

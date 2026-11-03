@@ -22,9 +22,14 @@ var _think_timer := 0.0
 ## 玩家处于无敌时 _try_damage() 直接返回、不会重置它，所以无敌一结束就会再次造成伤害。
 var _damage_cooldown := 0.0
 
+## 当前是否已经进入攻击距离。
+## 用布尔值记住这个状态，配合"停止距离 < 重新追击距离"形成迟滞。
+var _in_attack_range := false
+
 func enter(_msg: Dictionary = {}) -> void:
 	super.enter()
 	# 立刻朝玩家算一次，避免刚进 Run 的头 0.1 秒站着不动。
+	_in_attack_range = false
 	_think()
 	# 之后的下一次思考随机错开，避免所有敌人同一帧计算。
 	_think_timer = randf() * THINK_INTERVAL
@@ -48,15 +53,35 @@ func physics_update(delta: float) -> void:
 	character.move_and_slide()
 	_tick_contact_damage(delta)
 
-## 重新计算朝向玩家的方向；目标丢失或超出脱战半径就回 Idle。
+## 重新计算追击方向；目标丢失或超出脱战半径就回 Idle。
+##
+## 玩家进入攻击距离后停止移动，避免敌人穿过玩家后再次反向追回来。
+## 停止距离和重新追击距离不同，防止敌人在同一位置反复启停。
 func _think() -> void:
 	var enemy := character as EnemyCharacter
 	if enemy == null:
 		return
 	var target := enemy.get_player()
-	if target == null or enemy.global_position.distance_to(target.global_position) > enemy.detection_escape_radius:
+	if target == null:
+		return
+
+	var distance := enemy.global_position.distance_to(target.global_position)
+	if distance > enemy.detection_escape_radius:
 		parent_state_machine.change_state("Idle")
 		return
+
+	# 已经进入攻击范围：玩家没有拉开足够的距离前，保持原地。
+	if _in_attack_range:
+		if distance <= enemy.chase_resume_distance:
+			enemy.move_direction = Vector2.ZERO
+			return
+		_in_attack_range = false
+	# 首次进入攻击范围：停止移动，并记录当前状态。
+	elif distance <= enemy.attack_stop_distance:
+		_in_attack_range = true
+		enemy.move_direction = Vector2.ZERO
+		return
+
 	enemy.move_direction = (target.global_position - enemy.global_position).normalized()
 
 ## 玩家刚进入接触范围时立即尝试一次伤害。

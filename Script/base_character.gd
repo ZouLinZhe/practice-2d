@@ -42,6 +42,12 @@ signal died
 ## 受伤后的无敌时长（秒）。玩家场景设为 2.0，敌人场景设为 0.2。
 @export var invincible_time := 1.0
 
+## 受击时角色被推开的初始速度（像素/秒）。
+@export var knockback_speed := 300.0
+
+## 击退持续时间（秒）。速度在这段时间内逐渐衰减到零。
+@export var knockback_duration := 0.18
+
 ## 当前生命值。在 _ready() 里从 max_health 初始化（场景覆盖生效之后）。
 var health: int = 0
 
@@ -159,7 +165,7 @@ func take_damage(amount: int, from_position := Vector2.ZERO) -> bool:
 		is_dead = true
 		died.emit()
 		if state_machine:
-			state_machine.change_state("Die")
+			state_machine.change_state("Die", {"from": from_position})
 	else:
 		if state_machine:
 			state_machine.change_state("Hurt", {"from": from_position})
